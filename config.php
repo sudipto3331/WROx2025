@@ -1,12 +1,12 @@
 <?php
 // config.php — shared config, DB, helpers, security, email (SMTP via PHPMailer)
 
-// ---------- Security headers ----------
+/* ------------------------ Security headers ------------------------ */
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 
-// ---------- Sessions (secure cookies) ----------
+/* ------------------------ Sessions (secure cookies) ------------------------ */
 $cookieParams = session_get_cookie_params();
 session_set_cookie_params([
   'lifetime' => 0,
@@ -18,31 +18,51 @@ session_set_cookie_params([
 ]);
 if (session_status() !== PHP_SESSION_ACTIVE) session_start();
 
-// ---------- App config ----------
+/* ------------------------ App config ------------------------ */
 date_default_timezone_set('Asia/Dhaka');
 
-// ---------- Database credentials ----------
+/* ------------------------ Centralized routes (edit once here) ------------------------ */
+$APP_ROUTES = [
+  'home'        => '/index.php',
+  'dashboard'   => '/dashboard.php',
+  'leaderboard' => '/leaderboard.php',
+  'status'      => '/status.php',
+  'faq'         => '/faq.php',
+  'contact'     => '/contact.php',
+  'claim'       => '/claim.php',
+  'settings'    => '/settings.php',
+  'login'       => '/login.php',
+  'logout'      => '/logout.php',
+];
+
+/** Get a route by key (with fallback). */
+function route(string $key, string $fallback = '#'): string {
+  global $APP_ROUTES;
+  return $APP_ROUTES[$key] ?? $fallback;
+}
+/** Tiny alias. */
+function r(string $key, string $fallback = '#'): string { return route($key, $fallback); }
+
+/* ------------------------ Database credentials ------------------------ */
 define('DB_HOST', '194.233.77.177');
 define('DB_NAME', 'soralabs_masterdb');
 define('DB_USER', 'soralabs_masterdb');
 define('DB_PASS', ']Pi{5,^)G}]D');
 
-// ---------- Mail / SMTP settings ----------
-define('MAIL_FROM', 'info@soralabs.cc');   // your cPanel mailbox
+/* ------------------------ Mail / SMTP settings ------------------------ */
+define('MAIL_FROM', 'info@soralabs.cc');
 define('MAIL_FROM_NAME', 'SORA Labs');
 
-// Prefer .env or server env var for the password in production
-// e.g., put:  SMTP_PASS=your_secret  in environment and read via getenv('SMTP_PASS')
-define('SMTP_HOST', 'mail.soralabs.cc');   // from cPanel "Connect Devices"
-define('SMTP_PORT', 587);                  // 587 (TLS) or 465 (SSL)
-define('SMTP_USER', 'info@soralabs.cc');   // full email as username
+define('SMTP_HOST', 'server16.serverastro.com');
+define('SMTP_PORT', 465);                        // 587 (TLS) or 465 (SSL)
+define('SMTP_USER', 'info@soralabs.cc');
 define('SMTP_PASS', '*@.9j}#N2MT+');
-define('SMTP_ENCRYPTION', 'tls');          // 'tls' for 587, 'ssl' for 465
+define('SMTP_ENCRYPTION', 'ssl');                // 'tls' or 'ssl'
 
-// ---------- Paths ----------
+/* ------------------------ Paths ------------------------ */
 define('UPLOAD_DIR', __DIR__ . '/uploads');
 
-// ---------- Utilities ----------
+/* ------------------------ Utilities ------------------------ */
 function base_url(): string {
   $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
   $host  = $_SERVER['HTTP_HOST'] ?? 'localhost';
@@ -64,7 +84,7 @@ function db(): PDO {
   return $pdo;
 }
 
-// ---------- CSRF ----------
+/* ------------------------ CSRF ------------------------ */
 function csrf_token(): string {
   if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(32));
   return $_SESSION['csrf'];
@@ -79,7 +99,7 @@ function csrf_check(): void {
   }
 }
 
-// ---------- Flash ----------
+/* ------------------------ Flash ------------------------ */
 function flash(string $key, ?string $val=null) {
   if ($val === null) {
     $msg = $_SESSION['flash'][$key] ?? null;
@@ -89,12 +109,11 @@ function flash(string $key, ?string $val=null) {
   $_SESSION['flash'][$key] = $val;
 }
 
-// ---------- PHPMailer (Composer or manual include) ----------
+/* ------------------------ PHPMailer (Composer or manual include) ------------------------ */
 $autoload = __DIR__ . '/vendor/autoload.php';
 if (file_exists($autoload)) {
-  require_once $autoload; // Composer install: composer require phpmailer/phpmailer
+  require_once $autoload; // composer require phpmailer/phpmailer
 } else {
-  // Manual includes (upload PHPMailer src/ to lib/phpmailer/src)
   require_once __DIR__.'/lib/phpmailer/src/PHPMailer.php';
   require_once __DIR__.'/lib/phpmailer/src/SMTP.php';
   require_once __DIR__.'/lib/phpmailer/src/Exception.php';
@@ -102,7 +121,7 @@ if (file_exists($autoload)) {
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-// ---------- Email sender (HTML) via SMTP ----------
+/* ------------------------ Email sender (HTML) via SMTP ------------------------ */
 function send_mail_html(string $to, string $subject, string $html): bool {
   $mail = new PHPMailer(true);
   try {
@@ -120,30 +139,115 @@ function send_mail_html(string $to, string $subject, string $html): bool {
       $mail->Port       = SMTP_PORT ?: 587;
     }
 
-    $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME);
+    // Identity — align SPF/DMARC
+    $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME, true);
+    $mail->Sender = MAIL_FROM; // Return-Path/envelope sender
     $mail->addReplyTo(MAIL_FROM, MAIL_FROM_NAME);
+
+    // Headers
+    $mail->MessageID = sprintf('<%s@soralabs.cc>', bin2hex(random_bytes(12)));
+    $mail->addCustomHeader('List-Unsubscribe', '<mailto:'.MAIL_FROM.'>');
+
+    // Recipient
     $mail->addAddress($to);
 
+    // Content
     $mail->isHTML(true);
     $mail->Subject = $subject;
     $mail->Body    = $html;
-    // Plain text alternative improves deliverability
     $mail->AltBody = strip_tags(preg_replace('/<br\s*\/?>/i', "\n", $html));
     $mail->CharSet = 'UTF-8';
 
     return $mail->send();
   } catch (Exception $e) {
-    // Optionally log: error_log('Mailer Error: '.$e->getMessage());
     return false;
   }
 }
 
-// ---------- Tokens / Auth guards / Rate limit ----------
+/* ------------------------ Email templates ------------------------ */
+function email_template(string $title, string $preheader, string $contentHtml, ?string $ctaLabel=null, ?string $ctaUrl=null): string {
+  $year = date('Y'); $brand = 'SORA Labs'; $site  = 'https://soralabs.cc';
+  $btn = '';
+  if ($ctaLabel && $ctaUrl) {
+    $btn = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 6px 0;">
+      <tr><td align="center" bgcolor="#4f46e5" style="border-radius:10px;">
+        <a href="'.htmlspecialchars($ctaUrl).'" style="display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-weight:600;border-radius:10px;">'
+        .htmlspecialchars($ctaLabel).'</a>
+      </td></tr>
+    </table>
+    <div style="font-size:12px;color:#9fb6c9;line-height:18px;">If the button doesn’t work, copy &amp; paste this link:<br>
+      <a href="'.htmlspecialchars($ctaUrl).'" style="color:#c7fff6;text-decoration:underline;">'.htmlspecialchars($ctaUrl).'</a>
+    </div>';
+  }
+  $pre = $preheader ? '<div style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;">'
+        .htmlspecialchars($preheader).'</div>' : '';
+
+  return '<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0b0f14;color:#e9eef5;">
+  '.$pre.'
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0b0f14;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;">
+        <tr><td style="padding:0 0 14px 0;text-align:center;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#15ff99;box-shadow:0 0 10px #15ff99a6;margin-right:8px;"></span>
+          <span style="font-family:Inter,Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;color:#e9eef5;letter-spacing:.4px;">SORA Labs</span>
+        </td></tr>
+        <tr><td>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="border-radius:18px;border:1px solid #253141;background:#0f1520;">
+            <tr><td style="height:4px;background:linear-gradient(90deg,#6c63ff,#00e7ff,#ff6ec7);border-radius:18px 18px 0 0;"></td></tr>
+            <tr><td style="padding:24px 24px 8px 24px;">
+              <h1 style="margin:0;font-family:Inter,Arial,Helvetica,sans-serif;font-size:22px;line-height:28px;font-weight:800;color:#e9eef5;">'
+                .htmlspecialchars($title).'</h1>
+            </td></tr>
+            <tr><td style="padding:8px 24px 4px 24px;font-family:Inter,Arial,Helvetica,sans-serif;font-size:15px;line-height:22px;color:#d7e2ee;">
+              '.$contentHtml.$btn.'
+            </td></tr>
+            <tr><td style="padding:18px 24px 22px 24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #243041;">
+                <tr><td style="padding-top:12px;font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#9fb6c9;">
+                  '.$brand.' • <a href="'.$site.'" style="color:#c7fff6;text-decoration:none;">soralabs.cc</a><br>
+                  © '.$year.' '.$brand.'. All rights reserved.
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="height:10px;"></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>';
+}
+
+function send_templated_mail(string $to, string $subject, string $title, string $preheader, string $contentHtml, ?string $ctaLabel=null, ?string $ctaUrl=null): bool {
+  $html = email_template($title, $preheader, $contentHtml, $ctaLabel, $ctaUrl);
+  return send_mail_html($to, $subject, $html);
+}
+
+function email_verify_template(string $nameOrUser, string $verifyUrl): string {
+  $safeName = htmlspecialchars($nameOrUser ?: 'there');
+  $content = '<p style="margin:0 0 14px 0;">Hi '.$safeName.',</p>
+    <p style="margin:0 0 10px 0;">Thanks for signing up at <strong>SORA Labs</strong>. Please verify your email to activate your account.</p>';
+  return email_template('Verify your email', 'Verify your email for SORA Labs', $content, 'Verify Email', $verifyUrl);
+}
+function email_reset_template(string $nameOrUser, string $resetUrl): string {
+  $safeName = htmlspecialchars($nameOrUser ?: 'there');
+  $content = '<p style="margin:0 0 14px 0;">Hi '.$safeName.',</p>
+    <p style="margin:0 0 10px 0;">We received a request to reset your password. Click the button below to set a new one.</p>
+    <p style="margin:10px 0 0 0;color:#9fb6c9;font-size:13px;">If you didn’t request this, you can safely ignore this email.</p>';
+  return email_template('Reset your password', 'Reset your SORA Labs password', $content, 'Reset Password', $resetUrl);
+}
+
+/* ------------------------ Tokens / Auth guards / Rate limit ------------------------ */
 function token64(): string { return bin2hex(random_bytes(32)); }
 
 function require_login(): void {
   if (empty($_SESSION['user_id'])) {
-    header('Location: '.base_url().'/login.php');
+    header('Location: '.route('login'));
     exit;
   }
 }
@@ -157,7 +261,7 @@ function rate_limit(string $bucket, int $limit, int $windowSec): bool {
   return true;
 }
 
-// ---------- Theme helpers ----------
+/* ------------------------ Theme helpers (site UI) ------------------------ */
 function theme_head(string $title='SORA Labs'): void {
   echo '<!doctype html><html lang="en"><head><meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -193,26 +297,63 @@ function theme_head(string $title='SORA Labs'): void {
     .form-control, .form-select { background-color: rgba(255,255,255,.06); color: #e9eef5; border-color: rgba(255,255,255,.2); }
     .form-control:focus, .form-select:focus { box-shadow: 0 0 0 .25rem rgba(99,179,237,.25); border-color:#84c5ff; }
     a { color:#b6d7ff; }
+
+    /* ---- Spacer under the fixed top bar ----
+       Increased for mobile to prevent overlap; includes safe-area for iOS. */
+    .app-topbar-spacer { height: calc(136px + env(safe-area-inset-top, 0px)); }
+    @media (min-width: 992px) {
+      .app-topbar-spacer { height: 88px; }
+    }
   </style></head><body class="noise">';
 }
 
-function topbar(string $active=''): void {
-  echo '<nav class="navbar navbar-dark topbar">
+/**
+ * Top bar with centralized links.
+ * $active can be 'leaderboard'|'status'|'faq'|'contact'|'claim' to highlight.
+ */
+function topbar(string $active = ''): void {
+  $isLoggedIn = !empty($_SESSION['user_id']); ?>
+  <nav class="navbar navbar-dark fixed-top topbar glass" role="navigation">
     <div class="container-fluid">
-      <a class="navbar-brand d-flex align-items-center gap-2" href="#">
-        <span class="dot"></span><span class="brand fw-bold">SORA Labs</span>
-      </a>
-      <div class="d-flex align-items-center gap-2 flex-wrap">
-        <a class="btn btn-ghost btn-sm'.($active==='leaderboard'?' active':'').'" href="#"><i class="bi bi-trophy me-1"></i>Leaderboard</a>
-        <a class="btn btn-ghost btn-sm'.($active==='status'?' active':'').'" href="#"><i class="bi bi-speedometer2 me-1"></i>Overall Status</a>
-        <a class="btn btn-ghost btn-sm'.($active==='faq'?' active':'').'" href="#"><i class="bi bi-question-circle me-1"></i>FAQ</a>
-        <a class="btn btn-ghost btn-sm'.($active==='contact'?' active':'').'" href="#"><i class="bi bi-envelope me-1"></i>Contact</a>
-        <a class="btn btn-ghost btn-sm'.($active==='claim'?' active':'').'" href="#"><i class="bi bi-patch-check-fill me-1"></i>Claim</a>
-        <a class="btn btn-light btn-sm" href="login.php"><i class="bi bi-person me-1"></i>Login / Registration</a>
+      <div class="d-flex align-items-center gap-2">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="<?= r('home') ?>">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="brand fw-bold">SORA Labs</span>
+        </a>
+      </div>
+
+      <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+        <a href="<?= r('leaderboard') ?>" class="btn btn-ghost btn-sm<?= $active==='leaderboard'?' active':'' ?>">
+          <i class="bi bi-trophy me-1"></i>Leaderboard
+        </a>
+        <a href="<?= r('status') ?>" class="btn btn-ghost btn-sm<?= $active==='status'?' active':'' ?>">
+          <i class="bi bi-speedometer2 me-1"></i>Overall Status
+        </a>
+        <a href="<?= r('faq') ?>" class="btn btn-ghost btn-sm<?= $active==='faq'?' active':'' ?>">
+          <i class="bi bi-question-circle me-1"></i>FAQ
+        </a>
+        <a href="<?= r('contact') ?>" class="btn btn-ghost btn-sm<?= $active==='contact'?' active':'' ?>">
+          <i class="bi bi-envelope me-1"></i>Contact
+        </a>
+        <a href="<?= r('claim') ?>" class="btn btn-ghost btn-sm<?= $active==='claim'?' active':'' ?>">
+          <i class="bi bi-patch-check-fill me-1"></i>Claim
+        </a>
+
+        <?php if ($isLoggedIn): ?>
+          <a href="<?= r('dashboard') ?>" class="btn btn-light btn-sm">
+            <i class="bi bi-speedometer2 me-1"></i>Dashboard
+          </a>
+        <?php else: ?>
+          <a href="<?= r('login') ?>" class="btn btn-light btn-sm">
+            <i class="bi bi-person me-1"></i>Login / Registration
+          </a>
+        <?php endif; ?>
       </div>
     </div>
-  </nav>';
-}
+  </nav>
+  <!-- Spacer to push page content below the fixed nav (works on mobile & desktop) -->
+  <div class="app-topbar-spacer" aria-hidden="true"></div>
+<?php }
 
 function theme_foot(): void {
   echo '<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script></body></html>';
