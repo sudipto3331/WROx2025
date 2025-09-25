@@ -4,12 +4,16 @@ require_login();
 
 $pdo = db();
 
-// Pull profile + green credit
-$stmt = $pdo->prepare("SELECT username, email, first_name, last_name, created_at, last_login, green_credit FROM users WHERE id=:id");
+/** -------------------------------------------------
+ *  USER PROFILE
+ * -------------------------------------------------*/
+$stmt = $pdo->prepare("SELECT id, username, email, first_name, last_name, created_at, last_login, green_credit FROM users WHERE id=:id");
 $stmt->execute([':id'=>$_SESSION['user_id']]);
 $me = $stmt->fetch();
 
-// Pull submission history (newest first)
+/** -------------------------------------------------
+ *  SUBMISSION HISTORY (newest first)
+ * -------------------------------------------------*/
 $hist = [];
 try {
   $q = $pdo->prepare("
@@ -25,7 +29,7 @@ try {
   $hist = [];
 }
 
-// Prepare a light-weight array for the map (only entries with coords)
+/** Map-friendly subset */
 $hist_map = [];
 foreach ($hist as $h) {
   if ($h['gps_lat'] !== null && $h['gps_lng'] !== null) {
@@ -43,6 +47,26 @@ foreach ($hist as $h) {
     ];
   }
 }
+
+/** -------------------------------------------------
+ *  ORDERS (gc_orders)
+ * -------------------------------------------------*/
+$orders = [];
+try {
+  $qo = $pdo->prepare("
+    SELECT id, created_at, sku, product_name, unit_credits, qty, total_credits, status,
+           full_name, phone, address_line1, address_line2, city, postcode, notes
+    FROM gc_orders
+    WHERE user_id = :uid
+    ORDER BY created_at DESC, id DESC
+  ");
+  $qo->execute([':uid'=>$_SESSION['user_id']]);
+  $orders = $qo->fetchAll();
+} catch (Throwable $e) {
+  $orders = [];
+}
+
+function esc($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
 theme_head('Dashboard — SORA Labs');
 topbar(''); ?>
@@ -92,6 +116,38 @@ topbar(''); ?>
   .badge-warn   { background:#eab308; }
   .badge-danger { background:#ef4444; }
 
+  /* Orders table: force dark/glass look */
+  .table-darkish{
+    --bs-table-bg: transparent;
+    --bs-table-color: #f4f8ff;
+    --bs-table-border-color: rgba(255,255,255,.14);
+    --bs-table-striped-bg: rgba(255,255,255,.06);
+    --bs-table-striped-color: #f4f8ff;
+    --bs-table-hover-bg: rgba(255,255,255,.10);
+    --bs-table-hover-color: #ffffff;
+  }
+  .table-darkish > :not(caption) > * > *{
+    background-color: transparent !important;
+    color: #f4f8ff !important;
+    border-color: rgba(255,255,255,.14) !important;
+  }
+  .table-darkish thead th{
+    background: rgba(255,255,255,.08) !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid rgba(255,255,255,.22) !important;
+  }
+  .table-darkish td .small,
+  .table-darkish td .text-secondary{
+    color: #dbe8ff !important;
+  }
+
+  /* Status badges */
+  .badge-status{ font-weight:600; letter-spacing:.2px; }
+  .status-new        { background: linear-gradient(135deg,#6366f1,#22d3ee); color:#fff; }
+  .status-processing { background: linear-gradient(135deg,#f59e0b,#f97316); color:#fff; }
+  .status-shipped    { background: linear-gradient(135deg,#16a34a,#22c55e); color:#fff; }
+  .status-cancelled  { background: linear-gradient(135deg,#475569,#1f2937); color:#fff; }
+
   /* Mobile contrast fix (including tabs) */
   @media (max-width: 991.98px) {
     .glass,
@@ -106,9 +162,7 @@ topbar(''); ?>
       border-color: rgba(255,255,255,.16) !important;
       color: #f4f8ff !important;
     }
-    /* Tabs: make both idle and active dark & readable */
     .nav-tabs {
-      background: transparent;
       border-bottom: 1px solid rgba(255,255,255,0.18) !important;
     }
     .nav-tabs .nav-link {
@@ -135,8 +189,8 @@ topbar(''); ?>
     width: 30px; height: 30px; line-height: 28px;
     text-align: center; font-size: 20px;
     border-radius: 50%;
-    background: #16a34a;              /* bright green disc */
-    border: 2px solid #bbf7d0;        /* light green ring */
+    background: #16a34a;
+    border: 2px solid #bbf7d0;
     box-shadow: 0 0 0 2px rgba(0,0,0,.25), 0 8px 18px rgba(0,0,0,.45);
     color: #fff;
     filter: drop-shadow(0 1px 2px rgba(0,0,0,.5));
@@ -192,6 +246,11 @@ topbar(''); ?>
               View Contribution (Map)
             </button>
           </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="orders-tab" data-bs-toggle="tab" data-bs-target="#orders" type="button" role="tab" aria-controls="orders" aria-selected="false">
+              Orders
+            </button>
+          </li>
         </ul>
 
         <div class="tab-content pt-3">
@@ -200,10 +259,10 @@ topbar(''); ?>
             <div class="row g-3">
               <div class="col-md-6">
                 <div class="glass p-3 h-100">
-                  <div class="fw-semibold">Welcome, <?= htmlspecialchars($me['first_name'] ?: $me['username']) ?>!</div>
-                  <div class="text-secondary small">Email: <?= htmlspecialchars($me['email']) ?></div>
-                  <div class="text-secondary small">Member since: <?= htmlspecialchars($me['created_at']) ?></div>
-                  <div class="text-secondary small">Last login: <?= htmlspecialchars($me['last_login'] ?: '—') ?></div>
+                  <div class="fw-semibold">Welcome, <?= esc($me['first_name'] ?: $me['username']) ?>!</div>
+                  <div class="text-secondary small">Email: <?= esc($me['email']) ?></div>
+                  <div class="text-secondary small">Member since: <?= esc($me['created_at']) ?></div>
+                  <div class="text-secondary small">Last login: <?= esc($me['last_login'] ?: '—') ?></div>
                 </div>
               </div>
 
@@ -214,10 +273,7 @@ topbar(''); ?>
                   <div class="text-secondary small mb-3">Total points collected</div>
                   <div class="mt-auto">
                     <a class="btn btn-ghost me-2 mb-2" href="./"><i class="bi bi-geo-alt me-1"></i> Open Zone Dashboard</a>
-                    <!-- "View History" fixed to programmatically open the History tab -->
-                    <button id="btnViewHistory" class="btn btn-ghost mb-2" type="button">
-                      <i class="bi bi-clock-history me-1"></i> View History
-                    </button>
+                    <button id="btnViewHistory" class="btn btn-ghost mb-2" type="button"><i class="bi bi-clock-history me-1"></i> View History</button>
                   </div>
                 </div>
               </div>
@@ -226,6 +282,7 @@ topbar(''); ?>
                 <div class="glass p-3">
                   <div class="fw-semibold mb-2">Shortcuts</div>
                   <a class="btn btn-ghost me-2 mb-2" href="settings.php"><i class="bi bi-gear me-1"></i> Account Settings</a>
+                  <a class="btn btn-ghost me-2 mb-2" href="claim.php"><i class="bi bi-bag-heart me-1"></i> Claim / Shop</a>
                 </div>
               </div>
             </div>
@@ -239,7 +296,7 @@ topbar(''); ?>
               <div class="row g-3">
                 <?php foreach ($hist as $h):
                   $img = $h['img_path'] ?? '';
-                  $imgUrl = htmlspecialchars((strpos($img, 'http') === 0 ? $img : '/'.ltrim($img,'/')));
+                  $imgUrl = esc((strpos($img, 'http') === 0 ? $img : '/'.ltrim($img,'/')));
                   $lat = is_null($h['gps_lat']) ? null : (float)$h['gps_lat'];
                   $lng = is_null($h['gps_lng']) ? null : (float)$h['gps_lng'];
                   $latStr = $lat !== null ? number_format($lat, 5) : '—';
@@ -267,15 +324,15 @@ topbar(''); ?>
                       <div class="d-flex align-items-center justify-content-between">
                         <div>
                           <span class="badge-dot <?= $badgeClass ?>"></span>
-                          <span class="fw-semibold"><?= htmlspecialchars(ucfirst($status)) ?></span>
-                          <span class="text-secondary small ms-2"><?= htmlspecialchars(strtoupper($level)) ?></span>
+                          <span class="fw-semibold"><?= esc(ucfirst($status)) ?></span>
+                          <span class="text-secondary small ms-2"><?= esc(strtoupper($level)) ?></span>
                         </div>
                         <div class="fw-semibold">+<?= $points ?></div>
                       </div>
                       <div class="meta small mt-1">
-                        <div>Confidence: <?= htmlspecialchars($conf) ?>% • Verifier: <?= htmlspecialchars($ver) ?></div>
-                        <div>GPS: <?= $latStr ?>, <?= $lngStr ?> <?php if ($lat !== null && $lng !== null): ?>• <a class="link-light" target="_blank" href="<?= htmlspecialchars($mapLink) ?>">View map</a><?php endif; ?></div>
-                        <div>On: <?= htmlspecialchars($h['created_at']) ?></div>
+                        <div>Confidence: <?= esc($conf) ?>% • Verifier: <?= esc($ver) ?></div>
+                        <div>GPS: <?= $latStr ?>, <?= $lngStr ?> <?php if ($lat !== null && $lng !== null): ?>• <a class="link-light" target="_blank" href="<?= esc($mapLink) ?>">View map</a><?php endif; ?></div>
+                        <div>On: <?= esc($h['created_at']) ?></div>
                       </div>
                       <div class="mt-2 text-secondary small">
                         Reason: <?= ((int)$h['verified'] === 1 && $points > 0) ? "Tree verified ({$level})" : "Failed / Pending" ?>
@@ -307,6 +364,85 @@ topbar(''); ?>
               <?php endif; ?>
             </div>
           </div>
+
+          <!-- ORDERS -->
+          <div class="tab-pane fade" id="orders" role="tabpanel" aria-labelledby="orders-tab">
+            <div class="glass p-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <h2 class="h5 mb-0">Your Orders</h2>
+                <div class="text-secondary small"><?= count($orders) ?> order(s)</div>
+              </div>
+              <?php if (empty($orders)): ?>
+                <div class="text-secondary mt-2">No orders yet. Redeem from the <a class="link-light" href="<?= route('claim') ?>">Claim</a> page.</div>
+              <?php else: ?>
+                <div class="table-responsive mt-3">
+                  <table class="table table-hover table-striped align-middle mb-0 table-darkish">
+                    <thead>
+                      <tr>
+                        <th style="width:56px;">#</th>
+                        <th style="min-width:160px;">When</th>
+                        <th style="min-width:220px;">Product</th>
+                        <th>Qty</th>
+                        <th>Total (pts)</th>
+                        <th>Status</th>
+                        <th style="width:120px;">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <?php
+                        $i = 1;
+                        foreach ($orders as $o):
+                          $status = strtolower($o['status']);
+                          $badgeCls = 'status-new';
+                          if ($status === 'processing') $badgeCls = 'status-processing';
+                          elseif ($status === 'shipped') $badgeCls = 'status-shipped';
+                          elseif ($status === 'cancelled') $badgeCls = 'status-cancelled';
+                      ?>
+                        <tr>
+                          <td class="fw-bold"><?= $i++ ?></td>
+                          <td><?= esc($o['created_at']) ?></td>
+                          <td>
+                            <div class="fw-semibold"><?= esc($o['product_name']) ?></div>
+                            <div class="small text-secondary">SKU: <?= esc($o['sku']) ?></div>
+                            <div class="small text-secondary">Unit: <?= (int)$o['unit_credits'] ?> pts</div>
+                          </td>
+                          <td><?= (int)$o['qty'] ?></td>
+                          <td class="fw-semibold"><?= (int)$o['total_credits'] ?></td>
+                          <td>
+                            <span class="badge badge-status <?= $badgeCls ?>"><?= strtoupper(esc($o['status'])) ?></span>
+                          </td>
+                          <td>
+                            <button
+                              class="btn btn-ghost btn-sm"
+                              data-bs-toggle="modal"
+                              data-bs-target="#orderModal"
+                              data-id="<?= (int)$o['id'] ?>"
+                              data-when="<?= esc($o['created_at']) ?>"
+                              data-sku="<?= esc($o['sku']) ?>"
+                              data-name="<?= esc($o['product_name']) ?>"
+                              data-qty="<?= (int)$o['qty'] ?>"
+                              data-unit="<?= (int)$o['unit_credits'] ?>"
+                              data-total="<?= (int)$o['total_credits'] ?>"
+                              data-status="<?= strtoupper(esc($o['status'])) ?>"
+                              data-full="<?= esc($o['full_name']) ?>"
+                              data-phone="<?= esc($o['phone']) ?>"
+                              data-a1="<?= esc($o['address_line1']) ?>"
+                              data-a2="<?= esc($o['address_line2']) ?>"
+                              data-city="<?= esc($o['city']) ?>"
+                              data-zip="<?= esc($o['postcode']) ?>"
+                              data-notes="<?= esc($o['notes']) ?>"
+                            >
+                              <i class="bi bi-eye me-1"></i>View
+                            </button>
+                          </td>
+                        </tr>
+                      <?php endforeach; ?>
+                    </tbody>
+                  </table>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
         </div>
 
       </section>
@@ -317,23 +453,90 @@ topbar(''); ?>
 <!-- Leaflet JS (in case your theme doesn't include it) -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+<!-- Order Details Modal -->
+<div class="modal fade" id="orderModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content glass p-1">
+      <div class="modal-header border-0">
+        <h5 class="modal-title"><i class="bi bi-receipt me-2"></i>Order Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter:invert(1)"></button>
+      </div>
+      <div class="modal-body pt-0">
+        <div class="row g-2">
+          <div class="col-12">
+            <div class="small text-secondary">Order #</div>
+            <div id="om_id" class="fw-semibold">—</div>
+          </div>
+          <div class="col-md-6">
+            <div class="small text-secondary">When</div>
+            <div id="om_when">—</div>
+          </div>
+          <div class="col-md-6">
+            <div class="small text-secondary">Status</div>
+            <div id="om_status" class="fw-semibold">—</div>
+          </div>
+
+          <div class="col-12 mt-2">
+            <div class="small text-secondary">Product</div>
+            <div class="fw-semibold" id="om_name">—</div>
+            <div class="small text-secondary">SKU: <span id="om_sku">—</span></div>
+          </div>
+
+          <div class="col-md-4">
+            <div class="small text-secondary">Qty</div>
+            <div id="om_qty">—</div>
+          </div>
+          <div class="col-md-4">
+            <div class="small text-secondary">Unit</div>
+            <div id="om_unit">—</div>
+          </div>
+          <div class="col-md-4">
+            <div class="small text-secondary">Total</div>
+            <div id="om_total" class="fw-semibold">—</div>
+          </div>
+
+          <div class="col-12 mt-2">
+            <div class="small text-secondary">Ship to</div>
+            <div id="om_full">—</div>
+            <div id="om_a1">—</div>
+            <div id="om_a2"></div>
+            <div><span id="om_city">—</span> <span id="om_zip"></span></div>
+            <div>Phone: <span id="om_phone">—</span></div>
+          </div>
+
+          <div class="col-12 mt-2">
+            <div class="small text-secondary">Notes</div>
+            <div id="om_notes">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <a href="<?= route('claim') ?>" class="btn btn-ghost"><i class="bi bi-bag-heart me-1"></i>Shop more</a>
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
-  // Open History or Map tab via hash
+  // Open History or Map or Orders tab via hash
   document.addEventListener('DOMContentLoaded', () => {
-    if (location.hash === '#history') {
-      const btn = document.querySelector('[data-bs-target="#history"]');
-      if (btn) new bootstrap.Tab(btn).show();
-    }
-    if (location.hash === '#contrib') {
-      const btn = document.querySelector('[data-bs-target="#contrib"]');
+    const hashToTab = {
+      '#history': '#history',
+      '#contrib': '#contrib',
+      '#orders':  '#orders'
+    };
+    const desired = hashToTab[location.hash];
+    if (desired) {
+      const btn = document.querySelector(`[data-bs-target="${desired}"]`);
       if (btn) new bootstrap.Tab(btn).show();
     }
   });
 
-  // Ensure clicking the "View History" button activates the History tab
+  // "View History" button activates the History tab
   document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('btnViewHistory');
-    const historyTabTrigger = document.getElementById('history-tab'); // the tab button in <ul class="nav nav-tabs">
+    const historyTabTrigger = document.getElementById('history-tab');
     if (btn && historyTabTrigger) {
       btn.addEventListener('click', () => {
         new bootstrap.Tab(historyTabTrigger).show();
@@ -343,9 +546,7 @@ topbar(''); ?>
   });
 
   // Data for map from PHP
-  const contributions = <?=
-    json_encode($hist_map, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
-  ?>;
+  const contributions = <?= json_encode($hist_map, JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE) ?>;
 
   let contribMap = null;
   let contribMapInited = false;
@@ -360,7 +561,6 @@ topbar(''); ?>
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
     }).addTo(contribMap);
 
-    // Icons
     const plantIcon = L.divIcon({
       className: 'plant-marker',
       html: '<span class="emoji">🌱</span>',
@@ -379,7 +579,6 @@ topbar(''); ?>
         m.bindPopup(renderPopup(c), { maxWidth: 280 });
         plantBounds.push([c.lat, c.lng]);
       } else {
-        // Red for other submissions
         const dot = L.circleMarker([c.lat, c.lng], {
           radius: 5, color: '#ef4444', weight: 1.5, opacity: 0.95,
           fillColor: '#ef4444', fillOpacity: 0.55
@@ -389,7 +588,6 @@ topbar(''); ?>
       allBounds.push([c.lat, c.lng]);
     });
 
-    // Auto-zoom:
     if (plantBounds.length > 0) {
       if (plantBounds.length === 1) {
         contribMap.setView(plantBounds[0], 17);
@@ -424,13 +622,40 @@ topbar(''); ?>
     `;
   }
 
-  // Initialize map when its tab becomes visible
   document.addEventListener('shown.bs.tab', (ev) => {
     if (ev.target && ev.target.id === 'contrib-tab') {
       initContribMap();
       setTimeout(() => { if (contribMap) contribMap.invalidateSize(true); }, 200);
     }
   });
+
+  // Orders: fill modal
+  const orderModal = document.getElementById('orderModal');
+  if (orderModal) {
+    orderModal.addEventListener('show.bs.modal', (ev) => {
+      const btn = ev.relatedTarget;
+      if (!btn) return;
+      const set = (sel, val) => {
+        const el = orderModal.querySelector(sel);
+        if (el) el.textContent = (val && String(val).trim() !== '') ? val : '—';
+      };
+      set('#om_id',     btn.getAttribute('data-id'));
+      set('#om_when',   btn.getAttribute('data-when'));
+      set('#om_status', btn.getAttribute('data-status'));
+      set('#om_name',   btn.getAttribute('data-name'));
+      set('#om_sku',    btn.getAttribute('data-sku'));
+      set('#om_qty',    btn.getAttribute('data-qty'));
+      set('#om_unit',   btn.getAttribute('data-unit') + ' pts');
+      set('#om_total',  btn.getAttribute('data-total') + ' pts');
+      set('#om_full',   btn.getAttribute('data-full'));
+      set('#om_a1',     btn.getAttribute('data-a1'));
+      set('#om_a2',     btn.getAttribute('data-a2') || '');
+      set('#om_city',   btn.getAttribute('data-city'));
+      set('#om_zip',    btn.getAttribute('data-zip') || '');
+      const notes = btn.getAttribute('data-notes');
+      set('#om_notes',  notes && notes.length ? notes : '—');
+    });
+  }
 </script>
 
 <?php theme_foot();
