@@ -568,7 +568,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'submit_tree') {
             <option value="4">DataSet 4</option>
             <option value="5">DataSet 5</option>
           </select>
-          <div id="datasetHelp" class="form-text">Tables: sensor_ingest_1 … sensor_ingest_5</div>
+          <div id="datasetHelp" class="form-text"></div>
           <div id="realHelp" class="form-text" style="display:none;">Using table: <code>real_sensor_ingest</code></div>
         </div>
       </div>
@@ -751,11 +751,38 @@ if (isset($_GET['action']) && $_GET['action'] === 'submit_tree') {
     </div>
   </div>
 
+  <!-- Login Required Modal (floating dialogue) -->
+  <div class="modal fade glass-skin" id="loginRequiredModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header border-0">
+          <h5 class="modal-title"><i class="bi bi-shield-lock-fill me-2"></i>Login Required</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body pt-0">
+          <p class="mb-2">You need to sign in to upload proof and earn <strong>Green Credit</strong>.</p>
+          <ul class="small mb-0">
+            <li>Track your verified tree plantings</li>
+            <li>Appear on the Leaderboard</li>
+            <li>Redeem Green Credit in partner stores</li>
+          </ul>
+        </div>
+        <div class="modal-footer border-0">
+          <a href="/login.php" class="btn btn-light"><i class="bi bi-box-arrow-in-right me-1"></i>Login</a>
+          <button type="button" class="btn btn-ghost" data-bs-dismiss="modal">Maybe later</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
+    // PHP auth state -> JS
+    const IS_LOGGED_IN = <?= $isLoggedIn ? 'true' : 'false' ?>;
+
     // State
     const STORAGE_SOURCE  = 'soralabs_source';      // 'demo' (dataset mode) OR 'real'
     const STORAGE_DATASET = 'soralabs_dataset_id';  // 1..5 for dataset mode
@@ -798,6 +825,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'submit_tree') {
     const successModal = new bootstrap.Modal(successModalEl);
     const failModalEl = document.getElementById('failModal');
     const failModal = new bootstrap.Modal(failModalEl);
+    const loginRequiredModalEl = document.getElementById('loginRequiredModal');
+    const loginRequiredModal = new bootstrap.Modal(loginRequiredModalEl);
+
     document.getElementById('btnFailRetry').addEventListener('click', () => {
       failModal.hide();
       setTimeout(() => proofModal.show(), 180);
@@ -1022,6 +1052,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'submit_tree') {
     }
 
     function openProofModal() {
+      // If not logged in, show themed floating login dialog instead of the proof form
+      if (!IS_LOGGED_IN) {
+        loginRequiredModal.show();
+        return;
+      }
+
       if (!currentTask) return;
       const t = TASKS[currentTask.level];
       document.getElementById('proofTaskText').textContent = t.label + ` (Required: ${t.required})`;

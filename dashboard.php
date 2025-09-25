@@ -170,7 +170,7 @@ topbar(''); ?>
         <div class="d-flex align-items-center justify-content-between mb-3">
           <h1 class="h4 mb-0">Dashboard</h1>
           <div class="d-flex gap-2">
-            <a class="btn btn-ghost" href="/index.php"><i class="bi bi-map me-1"></i>Zone Map</a>
+            <a class="btn btn-ghost" href="./"><i class="bi bi-map me-1"></i>Zone Map</a>
             <a class="btn btn-light" href="logout.php"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
           </div>
         </div>
@@ -213,7 +213,7 @@ topbar(''); ?>
                   <div class="display-5 fw-bold"><?= (int)($me['green_credit'] ?? 0) ?></div>
                   <div class="text-secondary small mb-3">Total points collected</div>
                   <div class="mt-auto">
-                    <a class="btn btn-ghost me-2 mb-2" href="/index.php"><i class="bi bi-geo-alt me-1"></i> Open Zone Dashboard</a>
+                    <a class="btn btn-ghost me-2 mb-2" href="./"><i class="bi bi-geo-alt me-1"></i> Open Zone Dashboard</a>
                     <!-- "View History" fixed to programmatically open the History tab -->
                     <button id="btnViewHistory" class="btn btn-ghost mb-2" type="button">
                       <i class="bi bi-clock-history me-1"></i> View History

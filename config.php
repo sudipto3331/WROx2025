@@ -23,7 +23,7 @@ date_default_timezone_set('Asia/Dhaka');
 
 /* ------------------------ Centralized routes (edit once here) ------------------------ */
 $APP_ROUTES = [
-  'home'        => '/index.php',
+  'home'        => './',
   'dashboard'   => '/dashboard.php',
   'leaderboard' => '/leaderboard.php',
   'status'      => '/status.php',
