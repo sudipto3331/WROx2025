@@ -30,10 +30,10 @@ if ($isLoggedIn) {
 $wearDhkProducts = [
   // sku, name, credits, img, short description
   ['sku'=>'WDHK-TEE-CLASSIC', 'name'=>'WearDHK Classic T-Shirt', 'credits'=>1, 'img'=>'/assets/partners/weardhk/classic.jpg', 'desc'=>'Soft cotton • Unisex'],
-  ['sku'=>'WDHK-TEE-BAMBOO',  'name'=>'Bamboo Blend Tee',       'credits'=>160, 'img'=>'/assets/partners/weardhk/bamboo.jpg',  'desc'=>'Breathable bamboo • Unisex'],
-  ['sku'=>'WDHK-HOODIE',      'name'=>'Logo Hoodie',            'credits'=>260, 'img'=>'/assets/partners/weardhk/hoodie.png',   'desc'=>'Mid-weight fleece • Unisex'],
-  ['sku'=>'WDHK-CAP',         'name'=>'Embroidered Cap',        'credits'=>120, 'img'=>'/assets/partners/weardhk/cap.webp',     'desc'=>'Adjustable strapback'],
-  ['sku'=>'WDHK-TOTE',        'name'=>'Organic Tote Bag',       'credits'=>90,  'img'=>'/assets/partners/weardhk/bag.webp',     'desc'=>'Heavy canvas • Reusable'],
+  ['sku'=>'WDHK-TEE-BAMBOO',  'name'=>'Bamboo Blend Tee',       'credits'=>2, 'img'=>'/assets/partners/weardhk/bamboo.jpg',  'desc'=>'Breathable bamboo • Unisex'],
+  ['sku'=>'WDHK-HOODIE',      'name'=>'Logo Hoodie',            'credits'=>2, 'img'=>'/assets/partners/weardhk/hoodie.png',   'desc'=>'Mid-weight fleece • Unisex'],
+  ['sku'=>'WDHK-CAP',         'name'=>'Embroidered Cap',        'credits'=>3, 'img'=>'/assets/partners/weardhk/cap.webp',     'desc'=>'Adjustable strapback'],
+  ['sku'=>'WDHK-TOTE',        'name'=>'Organic Tote Bag',       'credits'=>2,  'img'=>'/assets/partners/weardhk/bag.webp',     'desc'=>'Heavy canvas • Reusable'],
 ];
 // Index by SKU for secure lookup during checkout
 $PRODUCTS_BY_SKU = [];

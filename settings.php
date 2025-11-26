@@ -213,7 +213,7 @@ topbar('');
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
           <h1 class="h4 mb-0">Account Settings</h1>
           <div class="d-flex gap-2">
-            <a class="btn btn-ghost" href="/index.php"><i class="bi bi-map me-1"></i>Zone Map</a>
+            <a class="btn btn-ghost" href="/index_plant.php"><i class="bi bi-map me-1"></i>Zone Map</a>
             <a class="btn btn-light" href="dashboard.php"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
           </div>
         </div>
